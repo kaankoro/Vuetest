@@ -1,11 +1,17 @@
 <template>
   <div>
-    <button v-if="!isRecording" @click="startRecording">Start Recording</button>
-    <button v-if="isRecording" @click="stopRecording">Stop Recording</button>
+    <button class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-l" v-if="!isRecording && !doneRecording" @click="startRecording">Start Recording</button>
+    <button class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-l" v-if="isRecording && !doneRecording" @click="stopRecording">Stop Recording</button>
     <video ref="video" width="320" height="240" autoplay></video>
     <div v-if="recordedBlob">
       <input v-model="description" placeholder="Enter description" />
-      <button @click="saveVideo">Save Video</button>
+      <button class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-l" @click="saveVideo">Save Video</button>
+    </div>
+    <div v-if="uploadProgress > 0">
+      <p>Chunk count: {{ uploadProgress }}</p>
+    </div>
+    <div v-if="compressionProgress">
+      <p>Compression Progress: {{ compressionProgress }}</p>
     </div>
   </div>
 </template>
@@ -13,53 +19,133 @@
 <script setup>
 import { ref } from 'vue';
 import axios from 'axios';
+import { useRouter } from 'vue-router';
+import io from 'socket.io-client';
+
+const socket = io('http://localhost:3000');
 
 const video = ref(null);
 const mediaRecorder = ref(null);
-const recordedChunks = ref([]);
 const recordedBlob = ref(null);
 const description = ref('');
 const isRecording = ref(false);
+const doneRecording = ref(false);
+const uploadProgress = ref(0);
+const compressionProgress = ref(0);
+const router = useRouter();
+const startTime = ref(null);
+const stopTime = ref(null);
+const duration = ref(null);
+const clientId = ref(null); // Generate a unique ID for the client
+
+function toSeconds(timeString) {
+  const [hoursStr, minutesStr, secondsStr] = timeString.split(':');
+  const [secondsPart, millisecondsStr] = secondsStr.split('.');
+
+  const hours = parseInt(hoursStr, 10);
+  const minutes = parseInt(minutesStr, 10);
+  const seconds = parseInt(secondsPart, 10);
+  const milliseconds = parseInt(millisecondsStr, 10);
+
+  return hours * 3600 + minutes * 60 + seconds + milliseconds/100
+}
 
 const startRecording = async () => {
   const stream = await navigator.mediaDevices.getUserMedia({ video: true });
   video.value.srcObject = stream;
 
-  mediaRecorder.value = new MediaRecorder(stream);
-  mediaRecorder.value.ondataavailable = (event) => {
-    recordedChunks.value.push(event.data);
+  if(!mediaRecorder.value) {
+    mediaRecorder.value = new MediaRecorder(stream);
+  }
+  mediaRecorder.value.ondataavailable = async (event) => {
+    if (event.data.size > 0) {
+      await uploadChunk(event.data);
+    }
   };
-  mediaRecorder.value.onstop = () => {
-    recordedBlob.value = new Blob(recordedChunks.value, { type: 'video/webm' });
-    const videoURL = URL.createObjectURL(recordedBlob.value);
-    video.value.src = videoURL;
-    video.value.controls = true;
-    video.value.srcObject = null;
+  mediaRecorder.value.onstart = () => {
+    startTime.value = Date.now(); // Record start time
+  };
+  mediaRecorder.value.onstop = async () => {
+    recordedBlob.value = true;
+    stopTime.value = Date.now();
+    duration.value += Math.round((stopTime.value - startTime.value)/1000);
+    console.log('Recording duration:', duration.value);
   };
 
-  mediaRecorder.value.start();
+  mediaRecorder.value.start(2000); // Adjust the timeslice value to control the chunk upload interval
   isRecording.value = true;
 };
 
 const stopRecording = () => {
   mediaRecorder.value.stop();
+  doneRecording.value = true;
   isRecording.value = false;
 };
 
-const saveVideo = async () => {
+const uploadChunk = async (chunk) => {
   const formData = new FormData();
-  formData.append('video', recordedBlob.value, 'video.webm');
-  formData.append('description', description.value);
+  formData.append('chunk', chunk);
+  formData.append('clientId', clientId.value);
 
   try {
-    const response = await axios.post('http://localhost:3000/upload', formData, {
+    await axios.post('http://localhost:3000/upload-chunk', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
-    console.log(response.data);
   } catch (error) {
     console.error(error);
   }
 };
+
+const finalizeUpload = async () => {
+  try {
+    await axios.post('http://localhost:3000/finalize-upload', { description: description.value, clientId });
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+const saveVideo = async () => {
+  await finalizeUpload();
+};
+
+socket.on('upload-progress', ({ clientId: id, progress }) => {
+  if (id === clientId.value) {
+    uploadProgress.value = progress;
+  }
+});
+
+socket.on('connected', (id) => {
+  clientId.value=id;
+});
+
+socket.on('compression-progress', ({ clientId: id, progress }) => {
+
+  if (id === clientId.value) {
+    compressionProgress.value = (toSeconds(progress["timemark"])/duration.value*100).toFixed(2);
+    if (compressionProgress.value > 100) compressionProgress.value = 100;
+  }
+});
+
+socket.on('compression-complete', ({ clientId: id }) => {
+
+  if (id === clientId.value) {
+    router.push({ name: 'View' });
+  }
+});
+
+router.beforeEach((to, from, next) => {
+  if (from.path === '/record-videos' && to.path !== '/record-videos') {
+    socket.disconnect();
+    console.log('Socket disconnected due to navigation away from /record-videos');
+  }
+  next();
+});
 </script>
+
+<style scoped>
+video {
+  margin-bottom: 20px;
+}
+</style>

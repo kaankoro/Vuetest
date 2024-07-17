@@ -1,19 +1,36 @@
-// server.js
 const express = require('express');
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const multer = require('multer');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
+const http = require('http');
+const socketIo = require('socket.io');
+const Kafkaesque = require('kafkaesque');
+const ffmpeg = require('fluent-ffmpeg');
 
 const app = express();
+const server = http.createServer(app);
+const io = socketIo(server, {
+  cors: {
+    origin: 'http://localhost:5173', // Replace with your client URL
+    methods: ['GET', 'POST']
+  }
+});
+
+const kafka = Kafkaesque({
+  brokers: [{ host: 'localhost', port: 9092 }],
+  clientId: 'video-upload-service'
+});
+
 const PORT = 3000;
 
 app.use(express.json());
 app.use(cors());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-mongoose.connect('mongodb://localhost:27017/test', {
+mongoose.connect('mongodb+srv://kaan:1234567890@videorecording.1q6gayp.mongodb.net/', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 }).then(() => console.log('MongoDB connected'))
@@ -29,7 +46,6 @@ const videoSchema = new mongoose.Schema({
   videoPath: String,
 });
 
-
 const Video = mongoose.model('Video', videoSchema);
 
 const storage = multer.diskStorage({
@@ -43,20 +59,89 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-app.post('/upload', upload.single('video'), async (req, res) => {
-  const { description } = req.body;
-  const videoPath = req.file.path;
+let uploadChunks = {};
 
-  const newVideo = new Video({
-    description,
-    videoPath,
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
+  io.emit('connected', socket.id);
+
+  socket.on('disconnect', () => {
+    try {
+      for (const chunkPath of uploadChunks[socket.id]) {
+        fs.unlinkSync(chunkPath); // Remove chunk file after appending
+      }
+      delete uploadChunks[socket.id];
+    } catch {console.log('no blob');}
+    console.log('Client disconnected:', socket.id);
   });
+});
+
+app.post('/upload-chunk', upload.single('chunk'), (req, res) => {
+  const chunkPath = req.file.path;
+  const clientId = req.body.clientId;
+
+  if (!uploadChunks[clientId]) {
+    uploadChunks[clientId] = [];
+  }
+  uploadChunks[clientId].push(chunkPath);
+
+  io.emit('upload-progress', { clientId, progress: uploadChunks[clientId].length });
+
+  kafka.produce({ topic: 'upload-chunks', partition: 0, messages: JSON.stringify({ clientId, chunkPath }) });
+
+  res.status(200).json({ message: 'Chunk uploaded successfully' });
+});
+
+app.post('/finalize-upload', async (req, res) => {
+  const description = req.body.description;
+  const clientId = req.body.clientId._value;
+  const videoDir = 'uploads/';
+  const videoPath = `${videoDir}${Date.now()}.webm`;
 
   try {
-    await newVideo.save();
-    res.status(201).json({ message: 'Video uploaded successfully', video: newVideo });
+    const writeStream = fs.createWriteStream(videoPath);
+    for (const chunkPath of uploadChunks[clientId]) {
+      const chunk = fs.readFileSync(chunkPath);
+      writeStream.write(chunk);
+      fs.unlinkSync(chunkPath); // Remove chunk file after appending
+    }
+    writeStream.end();
+
+    writeStream.on('finish', () => {
+      const compressedVideoPath = `${videoDir}${Date.now()}-compressed.webm`;
+
+      io.emit('compression-start', { clientId });
+
+      ffmpeg(videoPath)
+        .output(compressedVideoPath)
+        .videoCodec('libvpx')
+        .audioCodec('libvorbis')
+        .on('end', async () => {
+          fs.unlinkSync(videoPath); // Remove the original video file
+
+          const newVideo = new Video({
+            description,
+            videoPath: compressedVideoPath,
+          });
+          await newVideo.save();
+
+          delete uploadChunks[clientId];
+
+          io.emit('compression-complete', { clientId, video: newVideo });
+
+          res.status(201).json({ message: 'Video uploaded and compressed successfully', video: newVideo });
+        })
+        .on('error', (err) => {
+          console.error('Compression error:', err);
+          res.status(500).json({ message: 'Error compressing video', error: err });
+        })
+        .on('progress', (progress) => {
+          io.emit('compression-progress', { clientId, progress });
+        })
+        .run();
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Error saving video', error });
+    res.status(500).json({ message: 'Error finalizing upload', error });
   }
 });
 
@@ -104,6 +189,6 @@ app.post('/login', async (req, res) => {
   res.status(200).send('Login successful');
 });
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

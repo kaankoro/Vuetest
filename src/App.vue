@@ -1,13 +1,16 @@
 <template>
-  <Header />
-  <div class="sidebar">
-    <router-link to="/record-videos">Record Videos</router-link>
-    <router-link to="/view-videos">View Videos</router-link>
+  <div class="flex flex-col h-screen">
+  <Header class="text-2xl grid justify-center"/>
+  <div class="flex align-top gap-2 justify-center ">
+    <router-link class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-l" to="/">Main Page</router-link>
+    <router-link class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-l" to="/record-videos">Record Videos</router-link>
+    <router-link class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-l" to="/view-videos">View Videos</router-link>
   </div>
-  <div class="wrapper">
+  <div class="wrapper flex-grow">
     <router-view></router-view>
   </div>
-  <Footer />
+  <Footer class="grid justify-center" />
+</div>
 </template>
 
 <script setup>
@@ -19,35 +22,5 @@ const router = useRouter()
 </script>
 
 <style scoped>
-header {
-  line-height: 1.5;
-}
 
-.sidebar {
-  width: 200px;
-  float: left;
-}
-
-.logo {
-  display: block;
-  margin: 0 auto 2rem;
-}
-
-@media (min-width: 1024px) {
-  header {
-    display: flex;
-    place-items: center;
-    padding-right: calc(var(--section-gap) / 2);
-  }
-
-  .logo {
-    margin: 0 2rem 0 0;
-  }
-
-  header .wrapper {
-    display: flex;
-    place-items: flex-start;
-    flex-wrap: wrap;
-  }
-}
 </style>
