@@ -19,6 +19,18 @@ const io = socketIo(server, {
   }
 });
 
+const folderName = '/uploads';
+try {
+  console.log("try")
+  if (!fs.existsSync(folderName)) {
+    console.log("success")
+    fs.mkdirSync(folderName);
+  }
+} catch (err) {
+  console.error(err);
+}
+
+
 const kafka = Kafkaesque({
   brokers: [{ host: 'localhost', port: 9092 }],
   clientId: 'video-upload-service'

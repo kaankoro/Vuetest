@@ -22,7 +22,7 @@ import axios from 'axios';
 import { useRouter } from 'vue-router';
 import io from 'socket.io-client';
 
-const socket = io('http://localhost:3000');
+const socket = io('https://vuetest-2.onrender.com');
 
 const video = ref(null);
 const mediaRecorder = ref(null);
@@ -88,7 +88,7 @@ const uploadChunk = async (chunk) => {
   formData.append('clientId', clientId.value);
 
   try {
-    await axios.post('http://localhost:3000/upload-chunk', formData, {
+    await axios.post('https://vuetest-2.onrender.com/upload-chunk', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -100,7 +100,7 @@ const uploadChunk = async (chunk) => {
 
 const finalizeUpload = async () => {
   try {
-    await axios.post('http://localhost:3000/finalize-upload', { description: description.value, clientId });
+    await axios.post('https://vuetest-2.onrender.com/finalize-upload', { description: description.value, clientId });
   } catch (error) {
     console.error(error);
   }
