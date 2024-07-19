@@ -1,11 +1,10 @@
 <template>
-    <div>
-      <h1>View Videos</h1>
-      <div v-for="video in videos" :key="video._id" class="video-item">
-        <video width="320" height="240" controls>
-          <source :src="`https://vuetest-2.onrender.com/${video.videoPath}`" type="video/webm">
+    <div class="columns-4">
+      <div v-for="video in videos" :key="video._id" class="video-item break-inside-avoid">
+        <video width="320" height="240" controls class="shadow-lg shadow-[#6e6d6d] rounded m-1">
+          <source :src="`http://localhost:3000/${video.videoPath}`" type="video/webm">
         </video>
-        <p>{{ video.description }}</p>
+        <p class="flex justify-center"> {{ video.description }}</p>
       </div>
     </div>
   </template>
@@ -18,7 +17,7 @@
   
   const fetchVideos = async () => {
     try {
-      const response = await axios.get('https://vuetest-2.onrender.com/videos');
+      const response = await axios.get('http://localhost:3000/videos');
       videos.value = response.data;
     } catch (error) {
       console.error(error);

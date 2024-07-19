@@ -1,11 +1,15 @@
 <template>
   <div>
-    <button class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-l" v-if="!isRecording && !doneRecording" @click="startRecording">Start Recording</button>
-    <button class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-l" v-if="isRecording && !doneRecording" @click="stopRecording">Stop Recording</button>
+    <div class="flex justify-center gap-2 mb-2">
+    <button class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded" v-if="!isRecording && !doneRecording" @click="startRecording">Start Recording</button>
+    <button class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded" v-if="isRecording && !doneRecording" @click="stopRecording">Stop Recording</button>
+    <button class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded" v-if="isRecording && !doneRecording" @click="connectionHandler">Disconnect/connect</button>
+    </div>
+    <div class="grid justify-items-center justify-center">
     <video ref="video" width="320" height="240" autoplay></video>
     <div v-if="recordedBlob">
       <input v-model="description" placeholder="Enter description" />
-      <button class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-l" @click="saveVideo">Save Video</button>
+      <button class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded" @click="saveVideo">Save Video</button>
     </div>
     <div v-if="uploadProgress > 0">
       <p>Chunk count: {{ uploadProgress }}</p>
@@ -13,6 +17,7 @@
     <div v-if="compressionProgress">
       <p>Compression Progress: {{ compressionProgress }}</p>
     </div>
+  </div>
   </div>
 </template>
 
@@ -22,7 +27,7 @@ import axios from 'axios';
 import { useRouter } from 'vue-router';
 import io from 'socket.io-client';
 
-const socket = io('https://vuetest-2.onrender.com');
+const socket = io('http://localhost:3000');
 
 const video = ref(null);
 const mediaRecorder = ref(null);
@@ -33,6 +38,7 @@ const doneRecording = ref(false);
 const uploadProgress = ref(0);
 const compressionProgress = ref(0);
 const router = useRouter();
+const disconnect = ref(false);
 const startTime = ref(null);
 const stopTime = ref(null);
 const duration = ref(null);
@@ -53,13 +59,24 @@ function toSeconds(timeString) {
 const startRecording = async () => {
   const stream = await navigator.mediaDevices.getUserMedia({ video: true });
   video.value.srcObject = stream;
+  let blob_list = [];
 
   if(!mediaRecorder.value) {
     mediaRecorder.value = new MediaRecorder(stream);
   }
   mediaRecorder.value.ondataavailable = async (event) => {
-    if (event.data.size > 0) {
+    if (event.data.size > 0 && !disconnect.value && blob_list.length > 0) {
+      for (var i = 0; i < blob_list.length; ++ i) {
+        await uploadChunk(blob_list[i]);
+      }
       await uploadChunk(event.data);
+      blob_list = [];
+    }
+    else if (event.data.size > 0 && !disconnect.value) {
+      await uploadChunk(event.data);
+    }
+    else {
+      blob_list.push(event.data);
     }
   };
   mediaRecorder.value.onstart = () => {
@@ -76,11 +93,21 @@ const startRecording = async () => {
   isRecording.value = true;
 };
 
-const stopRecording = () => {
+const stopRecording = async () => {
   mediaRecorder.value.stop();
   doneRecording.value = true;
   isRecording.value = false;
+  try {
+    await axios.post('http://localhost:3000/done', { description: description.value, clientId });
+  } catch (error) {
+    console.error(error);
+  }
 };
+
+const connectionHandler = () => {
+  disconnect.value = !disconnect.value;
+  console.log(disconnect.value)
+}
 
 const uploadChunk = async (chunk) => {
   const formData = new FormData();
@@ -88,7 +115,7 @@ const uploadChunk = async (chunk) => {
   formData.append('clientId', clientId.value);
 
   try {
-    await axios.post('https://vuetest-2.onrender.com/upload-chunk', formData, {
+    await axios.post('http://localhost:3000/upload-chunk', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -100,7 +127,7 @@ const uploadChunk = async (chunk) => {
 
 const finalizeUpload = async () => {
   try {
-    await axios.post('https://vuetest-2.onrender.com/finalize-upload', { description: description.value, clientId });
+    await axios.post('http://localhost:3000/finalize-upload', { description: description.value, clientId });
   } catch (error) {
     console.error(error);
   }
