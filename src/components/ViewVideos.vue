@@ -2,7 +2,7 @@
     <div class="columns-4">
       <div v-for="video in videos" :key="video._id" class="video-item break-inside-avoid">
         <video width="320" height="240" controls class="shadow-lg shadow-[#6e6d6d] rounded m-1">
-          <source :src="`https://cors-anywhere.herokuapp.com/http://34.131.212.163/${video.videoPath}`" type="video/webm">
+          <source :src="`https://34.131.131.231/${video.videoPath}`" type="video/webm">
         </video>
         <p class="flex justify-center"> {{ video.description }}</p>
       </div>
@@ -17,7 +17,7 @@
   
   const fetchVideos = async () => {
     try {
-      const response = await axios.get('https://cors-anywhere.herokuapp.com/http://34.131.212.163/videos');
+      const response = await axios.get('https://34.131.131.231/videos');
       videos.value = response.data;
     } catch (error) {
       console.error(error);

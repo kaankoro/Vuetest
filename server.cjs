@@ -207,12 +207,14 @@ const http = require('http');
 const socketIo = require('socket.io');
 const Kafkaesque = require('kafkaesque');
 const ffmpeg = require('fluent-ffmpeg');
+const dotenv = require("dotenv");
+
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: 'http://localhost:5173', // Replace with your client URL
+    origin: '*', // Replace with your client URL
     methods: ['GET', 'POST']
   }
 });
@@ -224,11 +226,13 @@ const kafka = Kafkaesque({
 
 const PORT = 3000;
 
+dotenv.config();
+
 app.use(express.json());
 app.use(cors());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-mongoose.connect('mongodb+srv://kaan:1234567890@videorecording.1q6gayp.mongodb.net/', {
+mongoose.connect(`mongodb+srv://${process.env.MONGO_USERNAME}:${process.env.MONGO_PASSWORD}@videorecording.1q6gayp.mongodb.net/`, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 }).then(() => console.log('MongoDB connected'))
@@ -424,4 +428,3 @@ function cleanupClient(clientId) {
     console.log('Error during cleanup:', error);
   }
 }
-

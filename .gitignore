@@ -14,6 +14,9 @@ dist-ssr
 coverage
 *.local
 güvenlik.html
+.env
+güvenlikgpt.html
+localhost*
 
 /cypress/videos/
 /cypress/screenshots/
