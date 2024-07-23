@@ -30,7 +30,7 @@
 // app.use(cors());
 // app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// //mongodb+srv://kaan:1234567890@videorecording.1q6gayp.mongodb.net/
+// 
 
 // mongoose.connect('mongodb://localhost:27017', {
 //   useNewUrlParser: true,
