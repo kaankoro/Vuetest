@@ -145,8 +145,9 @@ socket.on('upload-progress', ({ clientId: id, progress }) => {
 });
 
 socket.on('connected', (id) => {
-  clientId.value=id;
-  console.log(id)
+  if(clientId.value == null) {
+    clientId.value=id;
+  }
 });
 
 socket.on('compression-progress', ({ clientId: id, progress }) => {
