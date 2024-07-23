@@ -17,7 +17,7 @@ güvenlik.html
 .env
 güvenlikgpt.html
 localhost*
-
+old*
 /cypress/videos/
 /cypress/screenshots/
 /uploads/1*

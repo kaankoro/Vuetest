@@ -113,6 +113,7 @@ const uploadChunk = async (chunk) => {
   const formData = new FormData();
   formData.append('chunk', chunk);
   formData.append('clientId', clientId.value);
+  console.log("value:", clientId.value)
 
   try {
     await axios.post('https://34.131.131.231/upload-chunk', formData, {
@@ -145,6 +146,7 @@ socket.on('upload-progress', ({ clientId: id, progress }) => {
 
 socket.on('connected', (id) => {
   clientId.value=id;
+  console.log(id)
 });
 
 socket.on('compression-progress', ({ clientId: id, progress }) => {
