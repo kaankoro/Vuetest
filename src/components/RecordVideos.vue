@@ -66,14 +66,22 @@ const startRecording = async () => {
   }
   mediaRecorder.value.ondataavailable = async (event) => {
     if (event.data.size > 0 && !disconnect.value && blob_list.length > 0) {
+      try {
       for (var i = 0; i < blob_list.length; ++ i) {
         await uploadChunk(blob_list[i]);
       }
       await uploadChunk(event.data);
       blob_list = [];
+    } catch {
+      blob_list.push(event.data);
+    }
     }
     else if (event.data.size > 0 && !disconnect.value) {
+      try {
       await uploadChunk(event.data);
+      } catch {
+        blob_list.push(event.data)
+      }
     }
     else {
       blob_list.push(event.data);
