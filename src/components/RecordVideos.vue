@@ -73,6 +73,7 @@ const startRecording = async () => {
       await uploadChunk(event.data);
       blob_list = [];
     } catch {
+      console.log("failed")
       blob_list.push(event.data);
     }
     }
@@ -80,6 +81,7 @@ const startRecording = async () => {
       try {
       await uploadChunk(event.data);
       } catch {
+        console.log("failed")
         blob_list.push(event.data)
       }
     }
