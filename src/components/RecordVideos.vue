@@ -3,7 +3,6 @@
     <div class="flex justify-center gap-2 mb-2">
     <button class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded" v-if="!isRecording && !doneRecording" @click="startRecording">Start Recording</button>
     <button class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded" v-if="isRecording && !doneRecording" @click="stopRecording">Stop Recording</button>
-    <button class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded" v-if="isRecording && !doneRecording" @click="connectionHandler">Disconnect/connect</button>
     </div>
     <div class="grid justify-items-center justify-center">
     <video ref="video" width="320" height="240" autoplay></video>
@@ -38,7 +37,6 @@ const doneRecording = ref(false);
 const uploadProgress = ref(0);
 const compressionProgress = ref(0);
 const router = useRouter();
-const disconnect = ref(false);
 const startTime = ref(null);
 const stopTime = ref(null);
 const duration = ref(null);
@@ -61,22 +59,22 @@ const startRecording = async () => {
   const stream = await navigator.mediaDevices.getUserMedia({ video: true });
   video.value.srcObject = stream;
   blob_list = [];
+  let logging=false;
 
   if(!mediaRecorder.value) {
     mediaRecorder.value = new MediaRecorder(stream);
   }
   mediaRecorder.value.ondataavailable = async (event) => {
-    if (event.data.size > 0 && !disconnect.value && blob_list.length > 0) {
-      for (var i = 0; i < blob_list.length; ++ i) {
+    if (event.data.size > 0 && !logging) {
+      for (var i = 0; i < blob_list.length; ++i) {
+        logging=true;
         await uploadChunk(blob_list[i], true, blob_list.length == i + 1);
       }
-      await uploadChunk(event.data, false);
+      logging=false;
+      await uploadChunk(event.data);
     }
-    else if (event.data.size > 0 && !disconnect.value) {
-      await uploadChunk(event.data, false);
-    }
-    else {
-      blob_list.push(event.data);
+    else if (event.data.size > 0) {
+      blob_list.push(event.data)
     }
   };
   mediaRecorder.value.onstart = () => {
@@ -104,12 +102,8 @@ const stopRecording = async () => {
   }
 };
 
-const connectionHandler = () => {
-  disconnect.value = !disconnect.value;
-  console.log(disconnect.value)
-}
 
-const uploadChunk = async (chunk, retry, last_value=false) => {
+const uploadChunk = async (chunk, retry=false, last_value=false) => {
   const formData = new FormData();
   formData.append('chunk', chunk);
   formData.append('clientId', clientId.value);
