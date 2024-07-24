@@ -125,6 +125,7 @@ const uploadChunk = async (chunk, retry) => {
   } catch (error) {
     console.error(error);
     if (!retry) {
+      console.log(blob_list.length)
       blob_list.push(chunk);
     }
   }
