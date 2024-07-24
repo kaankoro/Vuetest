@@ -43,6 +43,7 @@ const startTime = ref(null);
 const stopTime = ref(null);
 const duration = ref(null);
 const clientId = ref(null); // Generate a unique ID for the client
+let blob_list = []
 
 function toSeconds(timeString) {
   const [hoursStr, minutesStr, secondsStr] = timeString.split(':');
@@ -59,7 +60,7 @@ function toSeconds(timeString) {
 const startRecording = async () => {
   const stream = await navigator.mediaDevices.getUserMedia({ video: true });
   video.value.srcObject = stream;
-  let blob_list = [];
+  blob_list = [];
 
   if(!mediaRecorder.value) {
     mediaRecorder.value = new MediaRecorder(stream);
