@@ -68,10 +68,9 @@ const startRecording = async () => {
   mediaRecorder.value.ondataavailable = async (event) => {
     if (event.data.size > 0 && !disconnect.value && blob_list.length > 0) {
       for (var i = 0; i < blob_list.length; ++ i) {
-        await uploadChunk(blob_list[i], true);
+        await uploadChunk(blob_list[i], true, blob_list.length == i + 1);
       }
       await uploadChunk(event.data, false);
-      blob_list = [];
     }
     else if (event.data.size > 0 && !disconnect.value) {
       await uploadChunk(event.data, false);
@@ -110,7 +109,7 @@ const connectionHandler = () => {
   console.log(disconnect.value)
 }
 
-const uploadChunk = async (chunk, retry) => {
+const uploadChunk = async (chunk, retry, last_value=false) => {
   const formData = new FormData();
   formData.append('chunk', chunk);
   formData.append('clientId', clientId.value);
@@ -122,6 +121,9 @@ const uploadChunk = async (chunk, retry) => {
         'Content-Type': 'multipart/form-data',
       },
     });
+    if (last_value) {
+      blob_list = []
+    }
   } catch (error) {
     console.error(error);
     if (!retry) {
