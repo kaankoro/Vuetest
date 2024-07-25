@@ -155,7 +155,7 @@ const uploadChunk = async (chunk, number) => {
     });
     console.log("Uploaded blob number: ", number);
   } catch (error) {
-    console.error(error);
+    console.error("No connection, retrying.");
     blobList.push({ data: chunk, number });
   }
 };
