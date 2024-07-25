@@ -1,3 +1,3 @@
 <template>
- <footer>Author: Kaan</footer>
+    <footer>Author: Kaan</footer>
 </template>

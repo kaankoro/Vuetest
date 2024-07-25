@@ -1,140 +1,177 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
-const multer = require('multer');
-const cors = require('cors');
-const path = require('path');
-const fs = require('fs');
-const http = require('http');
-const socketIo = require('socket.io');
-const Kafkaesque = require('kafkaesque');
-const ffmpeg = require('fluent-ffmpeg');
+const express = require("express");
+const mongoose = require("mongoose");
+const bcrypt = require("bcrypt");
+const multer = require("multer");
+const cors = require("cors");
+const path = require("path");
+const fs = require("fs");
+const http = require("http");
+const socketIo = require("socket.io");
+const Kafkaesque = require("kafkaesque");
+const ffmpeg = require("fluent-ffmpeg");
 const dotenv = require("dotenv");
 
+dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: '*', // Replace with your client URL
-    methods: ['GET', 'POST']
-  }
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
 });
 
 const kafka = Kafkaesque({
-  brokers: [{ host: 'localhost', port: 9092 }],
-  clientId: 'video-upload-service'
+  brokers: [{ host: "localhost", port: 9092 }],
+  clientId: "video-upload-service",
+  retry: {
+    retries: 5,
+    factor: 3,
+    minTimeout: 1000,
+    maxTimeout: 3000,
+  },
+  compression: "gzip",
 });
 
 const PORT = 3000;
 
-dotenv.config();
-
 app.use(express.json());
 app.use(cors());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-mongoose.connect(`mongodb+srv://${process.env.MONGO_USERNAME}:${process.env.MONGO_PASSWORD}@videorecording.1q6gayp.mongodb.net/`, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-}).then(() => console.log('MongoDB connected'))
-  .catch(err => console.log(err));
-
-const userSchema = new mongoose.Schema({
-  email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-});
+mongoose
+  .connect(
+    `mongodb+srv://${process.env.MONGO_USERNAME}:${process.env.MONGO_PASSWORD}@videorecording.1q6gayp.mongodb.net/`,
+    {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    }
+  )
+  .then(() => console.log("MongoDB connected"))
+  .catch((err) => console.log(err));
 
 const videoSchema = new mongoose.Schema({
   description: String,
   videoPath: String,
 });
 
-const Video = mongoose.model('Video', videoSchema);
+const Video = mongoose.model("Video", videoSchema);
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/');
+    cb(null, "uploads/");
   },
   filename: (req, file, cb) => {
-    cb(null, `${Date.now()}-${file.originalname}-${Math.floor(Math.random()*1000000)}`);
+    cb(
+      null,
+      `${Date.now()}-${file.originalname}-${Math.floor(
+        Math.random() * 1000000
+      )}`
+    );
   },
 });
 
 const upload = multer({ storage });
 
 let uploadChunks = {};
-let lastChunkReceived = {};
-let timeouts = {};
 let doneRecording = {};
+let cleanupTimeouts = {};
 
-io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
-  io.emit('connected', socket.id);
+// WebSocket connection setup
+io.on("connection", (socket) => {
+  console.log("Client connected:", socket.id);
+  io.emit("connected", socket.id);
 
-  socket.on('disconnect', () => {
-    cleanupClient(socket.id);
-    console.log('Client disconnected:', socket.id);
+  socket.on("disconnect", () => {
+    if (doneRecording[socket.id]) {
+      cleanupClient(socket.id);
+    }
+    console.log("Client disconnected:", socket.id);
   });
 });
 
-app.post('/upload-chunk', upload.single('chunk'), (req, res) => {
+/**
+ * Handles the uploading of video chunks.
+ * Stores the chunks in a Map and tracks their upload progress.
+ * Sets a timeout to clean up if no chunks are received for 60 seconds.
+ */
+app.post("/upload-chunk", upload.single("chunk"), (req, res) => {
   const chunkPath = req.file.path;
   const clientId = req.body.clientId;
-	console.log(clientId)
+  const blobNumber = parseInt(req.body.blobNumber);
 
   if (!uploadChunks[clientId]) {
-    uploadChunks[clientId] = [];
-    lastChunkReceived[clientId] = Date.now();
+    uploadChunks[clientId] = new Map();
     doneRecording[clientId] = false;
   }
-  uploadChunks[clientId].push(chunkPath);
-  lastChunkReceived[clientId] = Date.now();
 
-  io.emit('upload-progress', { clientId, progress: uploadChunks[clientId].length });
+  uploadChunks[clientId].set(blobNumber, chunkPath);
 
-  kafka.produce({ topic: 'upload-chunks', partition: 0, messages: JSON.stringify({ clientId, chunkPath }) });
+  io.emit("upload-progress", {
+    clientId,
+    progress: uploadChunks[clientId].size,
+  });
 
-  if (timeouts[clientId]) {
-    clearTimeout(timeouts[clientId]);
-  }
-  timeouts[clientId] = setTimeout(() => {
-    if (Date.now() - lastChunkReceived[clientId] > 5000 && !doneRecording[clientId]) {
+  // Produce message to Kafka
+  kafka.produce(
+    {
+      topic: "upload-chunks",
+      partition: 0,
+      messages: JSON.stringify({ clientId, chunkPath }),
+    },
+    (err) => {
+      if (err) {
+        console.error("Kafka produce error:", err);
+      } else {
+        console.log("Message produced to Kafka:", { clientId, chunkPath });
+      }
+    }
+  );
+
+  res.status(200).json({ message: "Chunk uploaded successfully" });
+
+  clearTimeout(cleanupTimeouts[clientId]);
+  cleanupTimeouts[clientId] = setTimeout(() => {
+    if (!doneRecording[clientId]) {
+      console.log(`Cleaning up client ${clientId} due to inactivity`);
       cleanupClient(clientId);
     }
-    else if (doneRecording[clientId]) {
-      clearTimeout(timeouts[clientId]);
-    }
-  }, 5000);
-
-  res.status(200).json({ message: 'Chunk uploaded successfully' });
+  }, 60000);
 });
 
-app.post('/finalize-upload', async (req, res) => {
+/**
+ * Finalizes the upload by combining all the chunks into a single video file.
+ * Compresses the video using ffmpeg and saves it to the database.
+ */
+app.post("/finalize-upload", async (req, res) => {
   const description = req.body.description;
-  const clientId = req.body.clientId._value;
-  const videoDir = 'uploads/';
+  const clientId = req.body.clientId;
+  const videoDir = "uploads/";
   const videoPath = `${videoDir}${Date.now()}.webm`;
 
   try {
     const writeStream = fs.createWriteStream(videoPath);
-    for (const chunkPath of uploadChunks[clientId]) {
+    const chunks = uploadChunks[clientId];
+
+    const sortedChunkNumbers = Array.from(chunks.keys()).sort((a, b) => a - b);
+    for (const blobNumber of sortedChunkNumbers) {
+      const chunkPath = chunks.get(blobNumber);
       const chunk = fs.readFileSync(chunkPath);
       writeStream.write(chunk);
-      fs.unlinkSync(chunkPath); // Remove chunk file after appending
     }
     writeStream.end();
 
-    writeStream.on('finish', () => {
+    writeStream.on("finish", () => {
       const compressedVideoPath = `${videoDir}${Date.now()}-compressed.webm`;
 
-      io.emit('compression-start', { clientId });
+      io.emit("compression-start", { clientId });
 
       ffmpeg(videoPath)
         .output(compressedVideoPath)
-        .videoCodec('libvpx')
-        .audioCodec('libvorbis')
-        .on('end', async () => {
+        .videoCodec("libvpx")
+        .audioCodec("libvorbis")
+        .on("end", async () => {
           fs.unlinkSync(videoPath); // Remove the original video file
 
           const newVideo = new Video({
@@ -145,88 +182,70 @@ app.post('/finalize-upload', async (req, res) => {
 
           cleanupClient(clientId);
 
-          io.emit('compression-complete', { clientId, video: newVideo });
+          io.emit("compression-complete", { clientId, video: newVideo });
 
-          res.status(201).json({ message: 'Video uploaded and compressed successfully', video: newVideo });
+          res.status(201).json({
+            message: "Video uploaded and compressed successfully",
+            video: newVideo,
+          });
         })
-        .on('error', (err) => {
-          console.error('Compression error:', err);
-          res.status(500).json({ message: 'Error compressing video', error: err });
+        .on("error", (err) => {
+          console.error("Compression error:", err);
+          res
+            .status(500)
+            .json({ message: "Error compressing video", error: err });
         })
-        .on('progress', (progress) => {
-          io.emit('compression-progress', { clientId, progress });
+        .on("progress", (progress) => {
+          io.emit("compression-progress", { clientId, progress });
         })
         .run();
     });
   } catch (error) {
-    res.status(500).json({ message: 'Error finalizing upload', error });
+    res.status(500).json({ message: "Error finalizing upload", error });
   }
 });
 
-app.get('/videos', async (req, res) => {
+/**
+ * Retrieves all videos from the database.
+ */
+app.get("/videos", async (req, res) => {
   try {
     const videos = await Video.find().lean();
     res.json(videos);
   } catch (error) {
-    res.status(500).json({ message: 'Error retrieving videos', error });
+    res.status(500).json({ message: "Error retrieving videos", error });
   }
 });
 
-const User = mongoose.model('User', userSchema);
-
-app.post('/signup', async (req, res) => {
-  const { email, password } = req.body;
-
-  const hashedPassword = await bcrypt.hash(password, 10);
-  const newUser = new User({
-    email,
-    password: hashedPassword,
-  });
-
-  try {
-    await newUser.save();
-    res.status(201).send('User created');
-  } catch (error) {
-    res.status(500).send('Error creating user');
-  }
-});
-
-app.post('/done', async (req, res) => {
-  const clientId = req.body.clientId._value;
+/**
+ * Marks the recording as done for the given client.
+ * Clears any pending cleanup timeouts.
+ */
+app.post("/done", async (req, res) => {
+  const clientId = req.body.clientId;
   doneRecording[clientId] = true;
+  clearTimeout(cleanupTimeouts[clientId]);
+  res.status(200).json({ message: "Recording marked as done" });
 });
 
-app.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-
-  const user = await User.findOne({ email });
-  if (!user) {
-    return res.status(404).send('User not found');
-  }
-
-  const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) {
-    return res.status(400).send('Invalid credentials');
-  }
-
-  res.status(200).send('Login successful');
-});
-
+// Start the server
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 
+/**
+ * Cleans up all chunks and associated data for the given client.
+ * Removes the temporary chunk files from the server.
+ */
 function cleanupClient(clientId) {
   try {
-    for (const chunkPath of uploadChunks[clientId]) {
-      fs.unlinkSync(chunkPath); // Remove chunk file
-    }
+    uploadChunks[clientId].forEach((chunkPath) => {
+      fs.unlinkSync(chunkPath);
+    });
     delete uploadChunks[clientId];
-    delete lastChunkReceived[clientId];
     delete doneRecording[clientId];
-    clearTimeout(timeouts[clientId]);
-    delete timeouts[clientId];
+    delete cleanupTimeouts[clientId];
   } catch (error) {
-    console.log('Error during cleanup:', error);
+    console.log("Error during cleanup:", error);
   }
 }
