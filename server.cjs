@@ -1,6 +1,5 @@
 const express = require("express");
 const mongoose = require("mongoose");
-const bcrypt = require("bcrypt");
 const multer = require("multer");
 const cors = require("cors");
 const path = require("path");
@@ -146,7 +145,7 @@ app.post("/upload-chunk", upload.single("chunk"), (req, res) => {
  */
 app.post("/finalize-upload", async (req, res) => {
   const description = req.body.description;
-  const clientId = req.body.clientId;
+  const clientId = req.body.clientId._value;
   const videoDir = "uploads/";
   const videoPath = `${videoDir}${Date.now()}.webm`;
 
@@ -206,14 +205,24 @@ app.post("/finalize-upload", async (req, res) => {
 });
 
 /**
- * Retrieves all videos from the database.
+ * Retrieves the list of videos from the database,
+ * checks if each video file exists in the uploads folder,
+ * and removes entries for videos that no longer exist.
  */
-app.get("/videos", async (req, res) => {
+app.get('/videos', async (req, res) => {
   try {
     const videos = await Video.find().lean();
-    res.json(videos);
+    const videoDir = path.join(__dirname);
+    let videosToSend = [];
+    for (const video of videos) {
+      const videoPath = path.join(videoDir, video.videoPath);
+      if (fs.existsSync(videoPath)) {
+        videosToSend.push(video);
+      }
+    }
+    res.json(videosToSend);
   } catch (error) {
-    res.status(500).json({ message: "Error retrieving videos", error });
+    res.status(500).json({ message: 'Error retrieving videos', error });
   }
 });
 
