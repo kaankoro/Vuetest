@@ -30,5 +30,7 @@ old*
 *.njsproj
 *.sln
 *.sw?
+backend/uploads
+
 
 *.tsbuildinfo

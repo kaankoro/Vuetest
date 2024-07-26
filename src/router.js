@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
-import ViewVideos from "./components/ViewVideos.vue";
-import RecordVideos from "./components/RecordVideos.vue";
-import Home from "./components/home.vue";
+import ViewVideos from "./pages/ViewVideos.vue";
+import RecordVideos from "./pages/RecordVideos.vue";
+import Home from "./pages/AppHome.vue";
 
 const routes = [
   { path: "/", component: Home },

@@ -15,21 +15,14 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
-import axios from 'axios';
+import { fetchVideos } from '../api/video';
 
 const videos = ref([]);
 const connectionLink = import.meta.env.VITE_CONNECTION_LINK;
 
-const fetchVideos = async () => {
-  try {
-    const response = await axios.get(`${import.meta.env.VITE_CONNECTION_LINK}/videos`);
-    videos.value = response.data;
-  } catch (error) {
-    console.error(error);
-  }
-};
-
-onMounted(fetchVideos);
+onMounted(async () => {
+  videos.value = await fetchVideos();
+});
 </script>
 
 <style scoped>

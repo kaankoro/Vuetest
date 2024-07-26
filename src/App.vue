@@ -19,8 +19,8 @@
 </template>
 
 <script setup>
-import Header from './components/header.vue'
-import Footer from './components/footer.vue'
+import Header from './components/layout/AppHeader.vue'
+import Footer from './components/layout/AppFooter.vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
