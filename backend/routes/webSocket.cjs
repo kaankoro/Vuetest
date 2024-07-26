@@ -1,3 +1,5 @@
+const { cleanupClient } = require("../utils/cleanup.cjs");
+
 let doneRecording = {};
 
 const setupWebSocket = (io) => {
