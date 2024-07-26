@@ -21,6 +21,7 @@ let cleanupTimeouts = {};
 router.post("/upload-chunk", upload.single("chunk"), (req, res) => {
   const { clientId, blobNumber, chunkPath } = extractChunkDetails(req);
   initializeClientState(clientId);
+  console.log(clientId + ": " + blobNumber)
 
   uploadChunks[clientId].set(blobNumber, chunkPath);
 
