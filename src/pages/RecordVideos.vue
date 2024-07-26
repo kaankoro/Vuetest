@@ -34,6 +34,8 @@ import { useRouter } from "vue-router";
 import { useWebSocket } from "../composables/useWebSocket";
 import { useUpload } from "../composables/useUpload";
 import adapter from "webrtc-adapter";
+import axios from 'axios';
+
 
 const video = ref(null);
 const mediaRecorder = ref(null);
@@ -79,7 +81,19 @@ const startRecording = async () => {
 const stopRecording = async () => {
   mediaRecorder.value.stop();
   isRecording.value = false;
+  sendRecordingStopped();
 };
+
+const sendRecordingStopped = async () => {
+  try {
+    await axios.post(`${import.meta.env.VITE_CONNECTION_LINK}/done`, {
+      description: description.value,
+      clientId: clientId.value,
+    });
+  } catch (error) {
+    console.error(error);
+  }
+}
 
 const saveVideo = async () => {
   await finalizeUpload();

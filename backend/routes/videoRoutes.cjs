@@ -196,4 +196,6 @@ function markRecordingDone(clientId) {
   clearTimeout(cleanupTimeouts[clientId]);
 }
 
-module.exports = router;
+
+module.exports =  { router, uploadChunks, doneRecording, cleanupTimeouts };
+

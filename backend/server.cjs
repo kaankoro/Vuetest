@@ -8,7 +8,7 @@ const dotenv = require("dotenv");
 dotenv.config();
 
 const { connectMongo } = require("./config/mongo.cjs");
-const videoRoutes = require("./routes/videoRoutes.cjs");
+const { router } = require("./routes/videoRoutes.cjs");
 const { setupWebSocket } = require("./routes/webSocket.cjs");
 
 const app = express();
@@ -30,7 +30,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 connectMongo();
 
-app.use("", videoRoutes);
+app.use("", router);
 setupWebSocket(io);
 
 server.listen(PORT, () => {
