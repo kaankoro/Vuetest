@@ -50,35 +50,30 @@ const clientId = ref(null);
 
 const router = useRouter();
 const { socket, setupWebSocketEvents } = useWebSocket();
-const { uploadBlobs, finalizeUpload } = useUpload({ clientId, description, uploadProgress, compressionProgress, duration, startTime, stopTime, video, router });
+const { uploadBlobs, finalizeUpload } = useUpload({
+  clientId,
+  description,
+  uploadProgress,
+  compressionProgress,
+  duration,
+  startTime,
+  stopTime,
+  video,
+  router,
+});
 
-setupWebSocketEvents(socket, { clientId, uploadProgress, compressionProgress, duration, router });
+setupWebSocketEvents(socket, {
+  clientId,
+  uploadProgress,
+  compressionProgress,
+  duration,
+  router,
+});
 
 const startRecording = async () => {
-  const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-  video.value.srcObject = stream;
-  mediaRecorder.value = new MediaRecorder(stream);
-
-  mediaRecorder.value.ondataavailable = async (event) => {
-    if (event.data.size > 0) {
-      await uploadBlobs(event.data);
-    }
-  };
-
-  mediaRecorder.value.onstart = () => {
-    startTime.value = Date.now();
-  };
-
-  mediaRecorder.value.onstop = async () => {
-    recordedBlob.value = true;
-    stopTime.value = Date.now();
-    duration.value += Math.round((stopTime.value - startTime.value) / 1000);
-    doneRecording.value = true;
-    await uploadBlobs();
-  };
-
-  mediaRecorder.value.start(500);
-  isRecording.value = true;
+  const stream = await getMediaStream();
+  initializeMediaRecorder(stream);
+  startMediaRecorder();
 };
 
 const stopRecording = async () => {
@@ -90,15 +85,54 @@ const saveVideo = async () => {
   await finalizeUpload();
 };
 
+const getMediaStream = async () => {
+  return await navigator.mediaDevices.getUserMedia({ video: true });
+};
+
+const initializeMediaRecorder = (stream) => {
+  video.value.srcObject = stream;
+  mediaRecorder.value = new MediaRecorder(stream);
+  mediaRecorder.value.ondataavailable = handleDataAvailable;
+  mediaRecorder.value.onstart = handleStart;
+  mediaRecorder.value.onstop = handleStop;
+};
+
+const startMediaRecorder = () => {
+  mediaRecorder.value.start(500);
+  isRecording.value = true;
+};
+
+const handleDataAvailable = async (event) => {
+  if (event.data.size > 0) {
+    await uploadBlobs(event.data);
+  }
+};
+
+const handleStart = () => {
+  startTime.value = Date.now();
+};
+
+const handleStop = async () => {
+  recordedBlob.value = true;
+  stopTime.value = Date.now();
+  duration.value += Math.round((stopTime.value - startTime.value) / 1000);
+  doneRecording.value = true;
+  await uploadBlobs();
+};
+
 router.beforeEach((to, from, next) => {
+  handleRouteChange(from, to);
+  next();
+});
+
+const handleRouteChange = (from, to) => {
   if (from.path === "/record-videos" && to.path !== "/record-videos") {
     socket.disconnect();
     if (mediaRecorder.value) {
       mediaRecorder.value.stop();
     }
   }
-  next();
-});
+};
 
 onMounted(() => {
   console.log("WebRTC adapter.js loaded:", adapter.browserDetails.browser);

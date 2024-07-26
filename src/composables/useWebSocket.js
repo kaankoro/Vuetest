@@ -1,10 +1,13 @@
 import io from "socket.io-client";
-import toSeconds from "../utils/time"
+import toSeconds from "../utils/time";
 
 export function useWebSocket() {
   const socket = io(import.meta.env.VITE_CONNECTION_LINK);
 
-  const setupWebSocketEvents = (socket, { clientId, uploadProgress, compressionProgress, duration, router }) => {
+  const setupWebSocketEvents = (
+    socket,
+    { clientId, uploadProgress, compressionProgress, duration, router }
+  ) => {
     socket.on("upload-progress", ({ clientId: id, progress }) => {
       if (id === clientId.value) {
         uploadProgress.value = progress;
