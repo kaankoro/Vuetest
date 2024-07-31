@@ -99,6 +99,14 @@ const saveVideo = async () => {
   await finalizeUpload();
 };
 
+const isMobile = () => {
+  if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+    return true
+  } else {
+    return false
+  }
+}
+
 const getMediaStream = async () => {
   const constraints = {
     audio: {
@@ -109,40 +117,21 @@ const getMediaStream = async () => {
     video: {}
   };
 
-  const isMobile = /Mobi|Android/i.test(navigator.userAgent);
-  const isIPhone = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-  // Check network speed (effective type)
-  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-  const effectiveType = connection ? connection.effectiveType : '4g';
-
-  if (effectiveType === '2g' || effectiveType === '3g') {
+  if (isMobile()) {
     constraints.video = {
-      width: { exact: 640 },
-      height: { exact: 480 },
+      width: { exact: 720 },
+      aspectRatio: { ideal: 9 / 16 },
       frameRate: 24
     };
-  } else {
-    if (isMobile) {
-      constraints.video = {
-        width: { exact: 720 },
-        height: { exact: 1280 },
-        frameRate: 24
-      };
-    } else if (isIPhone) {
-      constraints.video = {
-        width: { exact: 1280 },
-        height: { exact: 720 },
-        frameRate: 24
-      };
-    } else {
-      constraints.video = {
-        width: { exact: 1280 },
-        height: { exact: 720 },
-        frameRate: 24
-      };
-    }
   }
+  else {
+    constraints.video = {
+      width: { exact: 1280 },
+      height: { exact: 720 },
+      frameRate: 24
+    };
+  }
+
 
   try {
     return await navigator.mediaDevices.getUserMedia(constraints);
