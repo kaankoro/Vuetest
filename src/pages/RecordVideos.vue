@@ -88,6 +88,7 @@ const stopRecording = async () => {
   mediaRecorder.value.stop();
   isRecording.value = false;
   sendRecordingStopped();
+  stopStream();
 };
 
 const stopStream = async () => {
@@ -111,6 +112,7 @@ const saveVideo = async () => {
 };
 
 const isMobile = () => {
+  console.log(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent))
   console.log(navigator.userAgent)
   return (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent))
 }
