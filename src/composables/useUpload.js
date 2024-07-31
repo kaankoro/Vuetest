@@ -76,5 +76,9 @@ export function useUpload({ clientId, description }) {
     }
   };
 
-  return { uploadBlobs, finalizeUpload };
+  const isUploadDone = async () => {
+    return !blobList.length;
+  };
+
+  return { uploadBlobs, finalizeUpload, isUploadDone };
 }

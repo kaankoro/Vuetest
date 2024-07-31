@@ -14,7 +14,10 @@
       <video v-if="!doneRecording" ref="video" width="320" height="240" autoplay muted></video>
       <div v-if="recordedBlob">
         <input v-model="description" placeholder="Enter description" />
-        <button class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded" @click="saveVideo">
+        <button v-if="uploadDone" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded" @click="saveVideo">
+          Save Video
+        </button>
+        <button v-else class="bg-gray-300 text-gray-400 font-bold py-2 px-4 rounded" disabled>
           Save Video
         </button>
       </div>
@@ -49,12 +52,13 @@ const startTime = ref(null);
 const stopTime = ref(null);
 const duration = ref(0);
 const clientId = ref(null);
+const uploadDone = ref(false);
 
 let stream;
 
 const router = useRouter();
 const { socket, setupWebSocketEvents } = useWebSocket();
-const { uploadBlobs, finalizeUpload } = useUpload({
+const { uploadBlobs, finalizeUpload, isUploadDone } = useUpload({
   clientId,
   description,
   uploadProgress,
@@ -107,11 +111,7 @@ const saveVideo = async () => {
 };
 
 const isMobile = () => {
-  if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
-    return true
-  } else {
-    return false
-  }
+  return (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent))
 }
 
 const getMediaStream = async () => {
@@ -178,6 +178,12 @@ const handleStop = async () => {
   duration.value += Math.round((stopTime.value - startTime.value) / 1000);
   doneRecording.value = true;
   await uploadBlobs();
+  const doneRecordingInterval = setInterval(() => {
+    if(isUploadDone()) {
+      uploadDone.value = true;
+      clearInterval(doneRecordingInterval);
+    }
+  }, 1000);
 };
 
 router.beforeEach((to, from, next) => {
