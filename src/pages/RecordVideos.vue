@@ -11,7 +11,7 @@
       </button>
     </div>
     <div class="grid justify-items-center justify-center">
-      <video ref="video" width="320" height="240" autoplay muted></video>
+      <video v-if="!doneRecording" ref="video" width="320" height="240" autoplay muted></video>
       <div v-if="recordedBlob">
         <input v-model="description" placeholder="Enter description" />
         <button class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded" @click="saveVideo">
@@ -50,6 +50,8 @@ const stopTime = ref(null);
 const duration = ref(0);
 const clientId = ref(null);
 
+let stream;
+
 const router = useRouter();
 const { socket, setupWebSocketEvents } = useWebSocket();
 const { uploadBlobs, finalizeUpload } = useUpload({
@@ -73,7 +75,7 @@ setupWebSocketEvents(socket, {
 });
 
 const startRecording = async () => {
-  const stream = await getMediaStream();
+  stream = await getMediaStream();
   initializeMediaRecorder(stream);
   startMediaRecorder();
 };
@@ -83,6 +85,11 @@ const stopRecording = async () => {
   isRecording.value = false;
   sendRecordingStopped();
 };
+
+const stopStream = async () => {
+  stream.getTracks()
+    .forEach(track => track.stop());
+}
 
 const sendRecordingStopped = async () => {
   try {
@@ -183,6 +190,7 @@ const handleRouteChange = (from, to) => {
     socket.disconnect();
     if (mediaRecorder.value) {
       mediaRecorder.value.stop();
+      stopStream();
     }
   }
 };
