@@ -11,7 +11,7 @@
       </button>
     </div>
     <div class="grid justify-items-center justify-center">
-      <video ref="video" width="320" height="240" autoplay></video>
+      <video ref="video" width="320" height="240" autoplay muted></video>
       <div v-if="recordedBlob">
         <input v-model="description" placeholder="Enter description" />
         <button class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded" @click="saveVideo">
@@ -100,8 +100,58 @@ const saveVideo = async () => {
 };
 
 const getMediaStream = async () => {
-  return await navigator.mediaDevices.getUserMedia({ video: true });
+  const constraints = {
+    audio: {
+      sampleRate: 48000,
+      channelCount: 2,
+      volume: 1.0
+    },
+    video: {}
+  };
+
+  const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+  const isIPhone = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  // Check network speed (effective type)
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  const effectiveType = connection ? connection.effectiveType : '4g';
+
+  if (effectiveType === '2g' || effectiveType === '3g') {
+    constraints.video = {
+      width: { exact: 640 },
+      height: { exact: 480 },
+      frameRate: 24
+    };
+  } else {
+    if (isMobile) {
+      constraints.video = {
+        width: { exact: 720 },
+        height: { exact: 1280 },
+        frameRate: 24
+      };
+    } else if (isIPhone) {
+      constraints.video = {
+        width: { exact: 1280 },
+        height: { exact: 720 },
+        frameRate: 24
+      };
+    } else {
+      constraints.video = {
+        width: { exact: 1280 },
+        height: { exact: 720 },
+        frameRate: 24
+      };
+    }
+  }
+
+  try {
+    return await navigator.mediaDevices.getUserMedia(constraints);
+  } catch (err) {
+    console.error('Error accessing media devices.', err);
+    throw err;
+  }
 };
+
 
 const initializeMediaRecorder = (stream) => {
   video.value.srcObject = stream;

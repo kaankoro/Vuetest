@@ -6,6 +6,16 @@ const upload = require("../middlewares/upload.cjs");
 const Video = require("../models/video.cjs");
 const { cleanupClient } = require("../utils/cleanup.cjs");
 const { compressVideo } = require("../utils/compression.cjs");
+// const { Storage } = require("@google-cloud/storage");
+// const axios = require("axios");
+// const { v4: uuidv4 } = require("uuid");
+// const projectId = "kaan-test";
+// const storage = new Storage({
+//   projectId,
+// });
+// const bucketName = "kaan-test";
+// process.env.GOOGLE_APPLICATION_CREDENTIALS =
+//   "/Users/kaankoroglu/.config/gcloud/application_default_credentials.json";
 
 const router = express.Router();
 
@@ -21,7 +31,7 @@ let cleanupTimeouts = {};
 router.post("/upload-chunk", upload.single("chunk"), (req, res) => {
   const { clientId, blobNumber, chunkPath } = extractChunkDetails(req);
   initializeClientState(clientId);
-  console.log(clientId + ": " + blobNumber)
+  console.log(clientId + ": " + blobNumber);
 
   uploadChunks[clientId].set(blobNumber, chunkPath);
 
@@ -94,7 +104,7 @@ router.post("/finalize-upload", async (req, res) => {
     await writeChunksToStream(writeStream, uploadChunks[clientId]);
 
     writeStream.on("finish", () => {
-      compressVideoHandler(
+      compressVideo(
         videoPath,
         videoDir,
         clientId,
@@ -128,26 +138,73 @@ async function writeChunksToStream(writeStream, chunks) {
   writeStream.end();
 }
 
-function compressVideoHandler(
-  videoPath,
-  videoDir,
-  clientId,
-  description,
-  res,
-  io
-) {
-  compressVideo(
-    videoPath,
-    videoDir,
-    clientId,
-    description,
-    res,
-    io,
-    uploadChunks,
-    doneRecording,
-    cleanupTimeouts
-  );
-}
+// async function uploadVideoToBucket(filePath) {
+//   const videoFileName = `${uuidv4()}-original.webm`;
+//   await storage.bucket(bucketName).upload(filePath, {
+//     destination: videoFileName,
+//   });
+//   return videoFileName;
+// }
+
+// async function downloadVideoFromBucket(videoPath) {
+//   const localFilePath = path.join(__dirname, '..', videoPath); // Modify this path as needed
+
+//   try {
+//     await storage.bucket(bucketName).file(videoPath).download({ destination: localFilePath });
+//     console.log(`Video downloaded to ${localFilePath}`);
+//     return localFilePath;
+//   } catch (err) {
+//     console.error('Error downloading video from bucket:', err);
+//     throw err;
+//   }
+// }
+
+
+
+// async function compressVideoHandler(
+//   videoPath,
+//   videoDir,
+//   clientId,
+//   description,
+//   res,
+//   io
+// ) {
+//   try {
+//     const videoFileName = await uploadVideoToBucket(videoPath);
+//     fs.unlinkSync(videoPath);
+//     const response = await axios.post(
+//       "https://us-central1-commanding-day-378416.cloudfunctions.net/compressVideo",
+//       {
+//         videoPath: videoFileName,
+//         videoDir,
+//         clientId,
+//         description,
+//       }
+//     );
+
+//     const compressedVideoPath = response.data.path;
+//     const localFilePath = await downloadVideoFromBucket(compressedVideoPath);
+//     console.log(localFilePath)
+
+//     const newVideo = new Video({
+//       description,
+//       videoPath: compressedVideoPath,
+//     });
+//     await newVideo.save();
+
+//     io.emit("compression-complete", { clientId, video: newVideo });
+
+//     cleanupClient(clientId, uploadChunks, doneRecording, cleanupTimeouts);
+
+//     res.status(201).json({
+//       message: "Video uploaded and compressed successfully",
+//       video: newVideo,
+//     });
+//   } catch (error) {
+//     console.error("Compression error:", error);
+//     res.status(500).json({ message: "Error compressing video", error });
+//   }
+// }
 
 /**
  * Retrieves the list of videos from the database,
@@ -197,6 +254,4 @@ function markRecordingDone(clientId) {
   clearTimeout(cleanupTimeouts[clientId]);
 }
 
-
-module.exports =  { router, uploadChunks, doneRecording, cleanupTimeouts };
-
+module.exports = { router, uploadChunks, doneRecording, cleanupTimeouts };

@@ -11,8 +11,10 @@
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix --ignore-path .gitignore"
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.12.0",
     "dotenv": "^16.4.5",
     "mkcert": "^3.2.0",
+    "uuid": "^10.0.0",
     "webrtc-adapter": "^9.0.1"
   },
   "devDependencies": {

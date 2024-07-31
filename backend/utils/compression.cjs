@@ -1,7 +1,6 @@
 const fs = require("fs");
 const ffmpeg = require("fluent-ffmpeg");
 const Video = require("../models/video.cjs");
-const { cleanupClient } = require("./cleanup.cjs");
 
 /**
  * Compresses the given video file and saves the compressed version to the database.
@@ -12,9 +11,6 @@ const { cleanupClient } = require("./cleanup.cjs");
  * @param {string} description - Description to associate with the video.
  * @param {Object} res - Express response object.
  * @param {Object} io - Socket.io instance.
- * @param {Object} uploadChunks - Object tracking video chunks.
- * @param {Object} doneRecording - Object tracking recording completion status.
- * @param {Object} cleanupTimeouts - Object tracking cleanup timeouts.
  */
 const compressVideo = (
   videoPath,
@@ -23,9 +19,6 @@ const compressVideo = (
   description,
   res,
   io,
-  uploadChunks,
-  doneRecording,
-  cleanupTimeouts
 ) => {
   const compressedVideoPath = generateCompressedVideoPath(videoDir);
 
@@ -43,9 +36,6 @@ const compressVideo = (
         clientId,
         res,
         io,
-        uploadChunks,
-        doneRecording,
-        cleanupTimeouts
       )
     )
     .on("error", (err) => handleCompressionError(err, res))
@@ -70,9 +60,6 @@ async function handleCompressionEnd(
   clientId,
   res,
   io,
-  uploadChunks,
-  doneRecording,
-  cleanupTimeouts
 ) {
   fs.unlinkSync(videoPath); // Remove the original video file
 
@@ -81,8 +68,6 @@ async function handleCompressionEnd(
     videoPath: compressedVideoPath,
   });
   await newVideo.save();
-
-  cleanupClient(clientId, uploadChunks, doneRecording, cleanupTimeouts);
 
   io.emit("compression-complete", { clientId, video: newVideo });
 
