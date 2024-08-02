@@ -522,9 +522,9 @@ const isMobile = () => {
   return (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent))
 }
 
-const getMediaStream = async (selectedCameraSource, selectedMicSource) => {
+const getMediaStream = async (selectedCameraSource=selectedCameraSource.value, selectedMicSource=selectedMicSource.value) => {
   const constraints = {
-    audio: selectedMicSource ? { deviceId: { exact: selectedMicSource }, sampleRate: 48000, channelCount: 2, volume: 1.0 } : false,
+    audio: selectedMicSource ? { deviceId: { exact: selectedMicSource }, sampleRate: 48000, channelCount: 2, volume: 1.0 } : true,
     video: selectedCameraSource ? { deviceId: { exact: selectedCameraSource } } : {}
   };
 
