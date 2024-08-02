@@ -6,7 +6,7 @@ export function useWebSocket() {
 
   const setupWebSocketEvents = (
     socket,
-    { clientId, uploadProgress, compressionProgress, duration, router }
+    { clientId, uploadProgress, compressionProgress, duration, compressionComplete, videoPath, displayVideo }
   ) => {
     socket.on("upload-progress", ({ clientId: id, progress }) => {
       if (id === clientId.value) {
@@ -20,6 +20,12 @@ export function useWebSocket() {
       }
     });
 
+    socket.on("merged-video", ({clientId: id, videoPath}) => {
+      if (clientId.value == id) {
+        displayVideo.value = videoPath;
+      }
+    });
+
     socket.on("compression-progress", ({ clientId: id, progress }) => {
       if (id === clientId.value) {
         compressionProgress.value = (
@@ -30,9 +36,10 @@ export function useWebSocket() {
       }
     });
 
-    socket.on("compression-complete", ({ clientId: id }) => {
+    socket.on("compression-complete", ({ clientId: id, video }) => {
       if (id === clientId.value) {
-        router.push({ name: "View" });
+        compressionComplete.value = true;
+        videoPath.value = video;
       }
     });
   };

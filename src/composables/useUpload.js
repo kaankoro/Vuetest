@@ -1,4 +1,5 @@
 import axios from "axios";
+import { useRouter } from "vue-router";
 
 /**
  * Uploads chunks of video data and finalizes the upload process.
@@ -11,6 +12,7 @@ import axios from "axios";
 export function useUpload({ clientId, description }) {
   let blobNumber = 0;
   let blobList = [];
+  const router = useRouter(); // Initialize the router
 
   const uploadBlobs = async (data) => {
     if (data) {
@@ -62,15 +64,18 @@ export function useUpload({ clientId, description }) {
     );
   }
 
-  const finalizeUpload = async () => {
+  const finalizeUpload = async (videoPath) => {
     try {
       await axios.post(
         `${import.meta.env.VITE_CONNECTION_LINK}/finalize-upload`,
         {
           description: description.value,
           clientId: clientId.value,
+          videoPath: videoPath.value
         }
       );
+      router.push({ name: 'View' }); // Navigate to the "View" route
+
     } catch (error) {
       console.error("Error finalizing upload:", error);
     }

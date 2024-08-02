@@ -6,22 +6,13 @@ const upload = require("../middlewares/upload.cjs");
 const Video = require("../models/video.cjs");
 const { cleanupClient } = require("../utils/cleanup.cjs");
 const { compressVideo } = require("../utils/compression.cjs");
-// const { Storage } = require("@google-cloud/storage");
-// const axios = require("axios");
-// const { v4: uuidv4 } = require("uuid");
-// const projectId = "kaan-test";
-// const storage = new Storage({
-//   projectId,
-// });
-// const bucketName = "kaan-test";
-// process.env.GOOGLE_APPLICATION_CREDENTIALS =
-//   "/Users/kaankoroglu/.config/gcloud/application_default_credentials.json";
 
 const router = express.Router();
 
 let uploadChunks = {};
 let doneRecording = {};
 let cleanupTimeouts = {};
+let createdVideos = {};
 
 /**
  * Handles the uploading of video chunks.
@@ -29,17 +20,22 @@ let cleanupTimeouts = {};
  * Sets a timeout to clean up if no chunks are received for 60 seconds.
  */
 router.post("/upload-chunk", upload.single("chunk"), (req, res) => {
-  const { clientId, blobNumber, chunkPath } = extractChunkDetails(req);
-  initializeClientState(clientId);
-  console.log(clientId + ": " + blobNumber);
+  try {
+    const { clientId, blobNumber, chunkPath } = extractChunkDetails(req);
+    initializeClientState(clientId);
+    console.log(clientId + ": " + blobNumber);
 
-  uploadChunks[clientId].set(blobNumber, chunkPath);
+    uploadChunks[clientId].set(blobNumber, chunkPath);
 
-  notifyClientUploadProgress(req.app.get("io"), clientId);
-  produceKafkaMessage(clientId, chunkPath);
-  resetCleanupTimeout(clientId);
+    notifyClientUploadProgress(req.app.get("io"), clientId);
+    produceKafkaMessage(clientId, chunkPath);
+    resetCleanupTimeout(clientId);
 
-  res.status(200).json({ message: "Chunk uploaded successfully" });
+    res.status(200).json({ message: "Chunk uploaded successfully" });
+  } catch (error) {
+    console.error("Error in /upload-chunk:", error);
+    res.status(500).json({ message: "Error uploading chunk", error });
+  }
 });
 
 function extractChunkDetails(req) {
@@ -86,47 +82,44 @@ function resetCleanupTimeout(clientId) {
   cleanupTimeouts[clientId] = setTimeout(() => {
     if (!doneRecording[clientId]) {
       console.log(`Cleaning up client ${clientId} due to inactivity`);
-      cleanupClient(clientId, uploadChunks, doneRecording, cleanupTimeouts);
+      cleanupClient(
+        clientId,
+        uploadChunks,
+        doneRecording,
+        cleanupTimeouts,
+        createdVideos
+      );
     }
   }, 60000);
 }
 
 /**
- * Finalizes the upload by combining all the chunks into a single video file.
- * Compresses the video using ffmpeg and saves it to the database.
+ * Finalizes the upload by adding the video to the database.
  */
 router.post("/finalize-upload", async (req, res) => {
-  const { description, clientId, videoDir, videoPath } =
-    extractFinalizeDetails(req);
+  const { description, clientId, videoPath } = req.body;
 
   try {
-    const writeStream = fs.createWriteStream(videoPath);
-    await writeChunksToStream(writeStream, uploadChunks[clientId]);
+    const newVideo = new Video({
+      description,
+      videoPath,
+    });
+    await newVideo.save();
 
-    writeStream.on("finish", () => {
-      compressVideo(
-        videoPath,
-        videoDir,
-        clientId,
-        description,
-        res,
-        req.app.get("io")
-      );
+     // remove the compressed video from the list so it doesn't get deleted
+    createdVideos[clientId].pop();
+
+    req.app.get("io").emit("upload-finalized", { clientId, video: newVideo });
+
+    res.status(201).json({
+      message: "Video uploaded successfully",
+      video: newVideo,
     });
   } catch (error) {
+    console.error("Error in /finalize-upload:", error);
     res.status(500).json({ message: "Error finalizing upload", error });
   }
 });
-
-function extractFinalizeDetails(req) {
-  const videoDir = "uploads/";
-  return {
-    description: req.body.description,
-    clientId: req.body.clientId,
-    videoDir,
-    videoPath: `${videoDir}${Date.now()}.webm`,
-  };
-}
 
 async function writeChunksToStream(writeStream, chunks) {
   const sortedChunkNumbers = Array.from(chunks.keys()).sort((a, b) => a - b);
@@ -138,73 +131,67 @@ async function writeChunksToStream(writeStream, chunks) {
   writeStream.end();
 }
 
-// async function uploadVideoToBucket(filePath) {
-//   const videoFileName = `${uuidv4()}-original.webm`;
-//   await storage.bucket(bucketName).upload(filePath, {
-//     destination: videoFileName,
-//   });
-//   return videoFileName;
-// }
+/**
+ * Marks the recording as done for the given client.
+ * Merges the chunks and starts compression.
+ */
+router.post("/done", async (req, res) => {
+  const clientId = req.body.clientId;
+  markRecordingDone(clientId);
 
-// async function downloadVideoFromBucket(videoPath) {
-//   const localFilePath = path.join(__dirname, '..', videoPath); // Modify this path as needed
+  try {
+    const videoPath = await mergeChunks(req, res);
 
-//   try {
-//     await storage.bucket(bucketName).file(videoPath).download({ destination: localFilePath });
-//     console.log(`Video downloaded to ${localFilePath}`);
-//     return localFilePath;
-//   } catch (err) {
-//     console.error('Error downloading video from bucket:', err);
-//     throw err;
-//   }
-// }
+    res
+      .status(200)
+      .json({ message: "Recording marked as done and video merged" });
+  } catch (error) {
+    console.error("Error in /done:", error);
+    res.status(500).json({ message: "Error merging video", error });
+  }
+});
 
+async function initializeVideoState(clientId) {
+  if (!createdVideos[clientId]) {
+    createdVideos[clientId] = [];
+  }
+}
 
+async function mergeChunks(req, res) {
+  const clientId = req.body.clientId;
+  const videoDir = "uploads/";
+  const videoPath = `${videoDir}${Date.now()}.webm`;
+  await initializeVideoState(clientId);
+  createdVideos[clientId].push(videoPath);
+  const writeStream = fs.createWriteStream(videoPath);
+  const io = req.app.get("io");
 
-// async function compressVideoHandler(
-//   videoPath,
-//   videoDir,
-//   clientId,
-//   description,
-//   res,
-//   io
-// ) {
-//   try {
-//     const videoFileName = await uploadVideoToBucket(videoPath);
-//     fs.unlinkSync(videoPath);
-//     const response = await axios.post(
-//       "https://us-central1-commanding-day-378416.cloudfunctions.net/compressVideo",
-//       {
-//         videoPath: videoFileName,
-//         videoDir,
-//         clientId,
-//         description,
-//       }
-//     );
+  await writeChunksToStream(writeStream, uploadChunks[clientId]);
+  writeStream.on("finish", () => {
+    io.emit("merged-video", { clientId, videoPath });
 
-//     const compressedVideoPath = response.data.path;
-//     const localFilePath = await downloadVideoFromBucket(compressedVideoPath);
-//     console.log(localFilePath)
+    compressVideo(
+      videoPath,
+      videoDir,
+      clientId,
+      req.body.description || "",
+      res,
+      io,
+      createdVideos
+    );
+  });
 
-//     const newVideo = new Video({
-//       description,
-//       videoPath: compressedVideoPath,
-//     });
-//     await newVideo.save();
+  uploadChunks[clientId].forEach((chunkPath) => {
+    fs.unlinkSync(chunkPath);
+  });
+  delete uploadChunks[clientId];
+  return videoPath;
+}
 
-//     io.emit("compression-complete", { clientId, video: newVideo });
-
-//     cleanupClient(clientId, uploadChunks, doneRecording, cleanupTimeouts);
-
-//     res.status(201).json({
-//       message: "Video uploaded and compressed successfully",
-//       video: newVideo,
-//     });
-//   } catch (error) {
-//     console.error("Compression error:", error);
-//     res.status(500).json({ message: "Error compressing video", error });
-//   }
-// }
+function markRecordingDone(clientId) {
+  doneRecording[clientId] = true;
+  clearTimeout(cleanupTimeouts[clientId]);
+}
 
 /**
  * Retrieves the list of videos from the database,
@@ -218,8 +205,10 @@ router.get("/videos", async (req, res) => {
       videos,
       path.join(__dirname, "..")
     );
+
     res.json(validVideos);
   } catch (error) {
+    console.error("Error in /videos:", error);
     res.status(500).json({ message: "Error retrieving videos", error });
   }
 });
@@ -232,6 +221,7 @@ async function filterValidVideos(videos, videoDir) {
   const validVideos = [];
   for (const video of videos) {
     const videoPath = path.join(videoDir, video.videoPath);
+
     if (fs.existsSync(videoPath)) {
       validVideos.push(video);
     }
@@ -239,19 +229,10 @@ async function filterValidVideos(videos, videoDir) {
   return validVideos;
 }
 
-/**
- * Marks the recording as done for the given client.
- * Clears any pending cleanup timeouts.
- */
-router.post("/done", (req, res) => {
-  const clientId = req.body.clientId;
-  markRecordingDone(clientId);
-  res.status(200).json({ message: "Recording marked as done" });
-});
-
-function markRecordingDone(clientId) {
-  doneRecording[clientId] = true;
-  clearTimeout(cleanupTimeouts[clientId]);
-}
-
-module.exports = { router, uploadChunks, doneRecording, cleanupTimeouts };
+module.exports = {
+  router,
+  uploadChunks,
+  doneRecording,
+  cleanupTimeouts,
+  createdVideos,
+};

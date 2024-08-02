@@ -1,6 +1,5 @@
-const fs = require("fs");
 const ffmpeg = require("fluent-ffmpeg");
-const Video = require("../models/video.cjs");
+
 
 /**
  * Compresses the given video file and saves the compressed version to the database.
@@ -11,6 +10,7 @@ const Video = require("../models/video.cjs");
  * @param {string} description - Description to associate with the video.
  * @param {Object} res - Express response object.
  * @param {Object} io - Socket.io instance.
+ * @param {Object} createdVideos - Videos that are created for the user.
  */
 const compressVideo = (
   videoPath,
@@ -19,10 +19,11 @@ const compressVideo = (
   description,
   res,
   io,
+  createdVideos
 ) => {
   const compressedVideoPath = generateCompressedVideoPath(videoDir);
+   createdVideos[clientId].push(compressedVideoPath);
 
-  emitCompressionStart(io, clientId);
 
   ffmpeg(videoPath)
     .output(compressedVideoPath)
@@ -40,6 +41,7 @@ const compressVideo = (
     )
     .on("error", (err) => handleCompressionError(err, res))
     .on("progress", (progress) =>
+
       emitCompressionProgress(io, clientId, progress)
     )
     .run();
@@ -49,9 +51,12 @@ function generateCompressedVideoPath(videoDir) {
   return `${videoDir}${Date.now()}-compressed.webm`;
 }
 
-function emitCompressionStart(io, clientId) {
-  io.emit("compression-start", { clientId });
+async function initializeVideoState(clientId) {
+  if (!createdVideos[clientId]) {
+    createdVideos[clientId] = [];
+  }
 }
+
 
 async function handleCompressionEnd(
   videoPath,
@@ -61,20 +66,10 @@ async function handleCompressionEnd(
   res,
   io,
 ) {
-  fs.unlinkSync(videoPath); // Remove the original video file
 
-  const newVideo = new Video({
-    description,
-    videoPath: compressedVideoPath,
-  });
-  await newVideo.save();
 
-  io.emit("compression-complete", { clientId, video: newVideo });
+  io.emit("compression-complete", { clientId, video: compressedVideoPath });
 
-  res.status(201).json({
-    message: "Video uploaded and compressed successfully",
-    video: newVideo,
-  });
 }
 
 function handleCompressionError(err, res) {

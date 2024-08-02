@@ -1,5 +1,5 @@
 const { cleanupClient } = require("../utils/cleanup.cjs");
-const { uploadChunks, doneRecording, cleanupTimeouts } = require("./videoRoutes.cjs")
+const { uploadChunks, doneRecording, cleanupTimeouts, createdVideos } = require("./videoRoutes.cjs")
 
 
 const setupWebSocket = (io) => {
@@ -9,7 +9,7 @@ const setupWebSocket = (io) => {
 
     socket.on("disconnect", () => {
       if (doneRecording[socket.id]) {
-        cleanupClient(socket.id, uploadChunks, doneRecording, cleanupTimeouts);
+        cleanupClient(socket.id, uploadChunks, doneRecording, cleanupTimeouts, createdVideos);
       }
       console.log("Client disconnected:", socket.id);
     });

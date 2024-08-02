@@ -8,6 +8,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+recram.html
 .DS_Store
 dist
 dist-ssr
@@ -31,6 +32,7 @@ old*
 *.sln
 *.sw?
 backend/uploads
+
 
 
 *.tsbuildinfo
