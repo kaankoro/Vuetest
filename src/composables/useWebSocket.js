@@ -6,7 +6,7 @@ export function useWebSocket() {
 
   const setupWebSocketEvents = (
     socket,
-    { clientId, uploadProgress, compressionProgress, duration, compressionComplete, videoPath, displayVideo }
+    { clientId, uploadProgress, compressionProgress, duration, compressionComplete, videoPath }
   ) => {
     socket.on("upload-progress", ({ clientId: id, progress }) => {
       if (id === clientId.value) {
@@ -36,10 +36,9 @@ export function useWebSocket() {
       }
     });
 
-    socket.on("compression-complete", ({ clientId: id, video }) => {
+    socket.on("compression-complete", ({ clientId: id }) => {
       if (id === clientId.value) {
         compressionComplete.value = true;
-        videoPath.value = video;
       }
     });
   };

@@ -13,7 +13,7 @@
       </router-link>
 
       <video v-if="!doneCounting || isRecording" ref="video" autoplay muted class="aspect-video h-full w-full"></video>
-      <video v-else ref="recordedvideo" :src="`https://kaan.recram.com/${displayVideo}`" autoplay playsinline
+      <video v-else ref="recordedvideo" :src="`${mergedBlob}`" autoplay playsinline
         class="cursor-pointer aspect-video h-full w-full" @click="togglePlayPause"
         @playing="recordedVideoPaused = false" @pause="recordedVideoPaused = true"></video>
 
@@ -381,11 +381,19 @@ const compressionComplete = ref(false);
 const recordedVideoPaused = ref(false);
 const isLoading = ref(true);
 const videoPath = ref("");
-const displayVideo = ref("");
+const mergedBlob = ref(null);
 const SERVER = import.meta.env.VITE_CONNECTION_LINK
 
+const supportedVideos = {
+  mimeTypeArray: [
+    'video/mp4', 
+    'video/webm', 
+    'video/ogg'
+  ]
+};
 
 
+let displayBlobs = [];
 let stream;
 
 const router = useRouter();
@@ -409,7 +417,6 @@ setupWebSocketEvents(socket, {
   duration,
   compressionComplete,
   videoPath,
-  displayVideo
 });
 
 watch(compressionComplete, (newVal) => {
@@ -481,6 +488,8 @@ const startRecording = async () => {
 const stopRecording = async () => {
   mediaRecorder.value.stop();
   isRecording.value = false;
+  let Blobs = new Blob(displayBlobs, {type: supportedVideos.mimeTypeArray[0]});
+  mergedBlob.value = (URL.createObjectURL(Blobs))
   sendRecordingStopped();
   stopStream();
 };
@@ -570,6 +579,7 @@ const startMediaRecorder = () => {
 
 const handleDataAvailable = async (event) => {
   if (event.data.size > 0) {
+    displayBlobs.push(event.data);
     await uploadBlobs(event.data);
   }
 };

@@ -68,7 +68,7 @@ async function handleCompressionEnd(
 ) {
 
 
-  io.emit("compression-complete", { clientId, video: compressedVideoPath });
+  io.emit("compression-complete", { clientId });
 
 }
 
