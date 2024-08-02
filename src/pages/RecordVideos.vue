@@ -13,7 +13,7 @@
       </router-link>
 
       <video v-if="!doneCounting || isRecording" ref="video" autoplay muted class="aspect-video h-full w-full"></video>
-      <video v-else ref="recordedvideo" :src="`http://localhost:3000/${displayVideo}`" autoplay playsinline
+      <video v-else ref="recordedvideo" :src="`https://kaan.recram.com/${displayVideo}`" autoplay playsinline
         class="cursor-pointer aspect-video h-full w-full" @click="togglePlayPause"
         @playing="recordedVideoPaused = false" @pause="recordedVideoPaused = true"></video>
 
