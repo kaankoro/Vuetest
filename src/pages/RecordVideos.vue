@@ -265,7 +265,8 @@
             </select>
           </div>
           <div class="mt-4 flex justify-center items-center w-full"><button @click="openedSettings = false"
-              class="flex w-[100px] items-center justify-center gap-2 rounded-md bg-dark py-1.5 text-sm font-semibold text-white duration-200 ease-in hover:opacity-70">Cancel</button><button @click="getMediaStream"
+              class="flex w-[100px] items-center justify-center gap-2 rounded-md bg-dark py-1.5 text-sm font-semibold text-white duration-200 ease-in hover:opacity-70">Cancel</button><button
+              @click="getMediaStream"
               class="flex w-[100px] items-center justify-center gap-2 rounded-md bg-primary py-1.5 text-sm font-semibold text-white duration-200 ease-in hover:opacity-70 ml-2">Apply</button>
           </div>
         </div>
@@ -522,10 +523,10 @@ const isMobile = () => {
   return (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent))
 }
 
-const getMediaStream = async (selectedCameraSource, selectedMicSource) => {
+const getMediaStream = async () => {
   const constraints = {
-    audio: selectedMicSource ? { deviceId: { exact: selectedMicSource }, sampleRate: 48000, channelCount: 2, volume: 1.0 } : true,
-    video: selectedCameraSource ? { deviceId: { exact: selectedCameraSource } } : {}
+    audio: selectedMicrophone.value ? { deviceId: { exact: selectedMicrophone.value }, sampleRate: 48000, channelCount: 2, volume: 1.0 } : true,
+    video: selectedCamera.value ? { deviceId: { exact: selectedCamera.value } } : {}
   };
 
   if (isMobile()) {
